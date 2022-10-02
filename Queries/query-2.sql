@@ -1,2 +1,0 @@
-USE classicmodels;
-SELECT count(

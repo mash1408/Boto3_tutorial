@@ -1,3 +1,0 @@
-indexes
--clustered index
--unclustered index
