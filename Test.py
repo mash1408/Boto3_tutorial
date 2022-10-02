@@ -2,6 +2,12 @@ import boto3
 from boto3 import Session
 from botocore import exceptions
 import io
+import paramiko
+
+
+key = paramiko.RSAKey.from_private_key_file('./AWS/Passkey.pem')
+client = paramiko.SSHClient()
+client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
 session = Session()
 credentials = session.get_credentials()
@@ -9,7 +15,7 @@ credentials = session.get_credentials()
 # separately can lead to a race condition. Use this to get an actual matched
 # set.
 current_credentials = credentials.get_frozen_credentials()
-commands=["mkdir Test"]
+commands=["sudo wget https://bucket4600.s3.ap-northeast-1.amazonaws.com/index.html"]
 
 AWS_REGION='ap-northeast-1'
 location = {'LocationConstraint': AWS_REGION}
@@ -25,6 +31,7 @@ def create_bucket(bucket_name):
 
 def upload_file_to_bucket(bucket_name,obj_url):
     s3_client.upload_file(obj_url,bucket_name,'error.html')
+
 def get_object_from_bucket(bucket_name):
     res=s3_client.get_object(
         Bucket=bucket_name,
@@ -35,6 +42,7 @@ def download_file_from_bucket(bucket_name,key_name):
     data=io.BytesIO()
     s3_client.download_fileobj(bucket_name, key_name, data)
     return data
+
 def launch_instance():
     try:
         INSTANCE_TYPE = 't2.micro'  #These will be environment variables that we must specify in lambda
@@ -56,34 +64,48 @@ def launch_instance():
         )
         print("New instance created:", instance[0].id)
     except Exception as e:
-        print("An errorrrrrr occured     "+str(e))
+        print("An error occured "+str(e))
     
 
 
-def execute_command_on_instances(client, commands, instance_ids):
-    """Runs commands on remote linux instances
-    :param client: a boto/boto3 ssm client
-    :param commands: a list of strings, each one a command to execute on the instances
-    :param instance_ids: a list of instance_id strings, of the instances on which to execute the command
-    :return: the response from the send_command function (check the boto3 docs for ssm client.send_command() )
-    """
-
+def execute_command_on_instances(client, commands, instance_ids,bucket_name):
+    '''To execute a command on an instance using the SSM client setup on the target machine'''
+    commands= " ".join(["sudo wget https://",bucket_name,".s3.ap-northeast-1.amazonaws.com/index.html"])
     resp = client.send_command(
         DocumentName="AWS-RunShellScript", # One of AWS' preconfigured documents
         Parameters={'commands': commands},
         InstanceIds=instance_ids,
     )
     return resp
-def test(bucket_name,file_url):
-    upload_file_to_bucket(bucket_name,file_url)
-    # launch_instance()
 
-# bucket_name= input('Enter Bucket Name')
-# file_url=input('Enter the location of the file')
-# test(bucket_name,file_url)
-# res=download_file_from_bucket(bucket_name,file_url)
-InstanceIds=[x for x in input('Provide instanceID').split(' ')]
-print(InstanceIds)
-execute_command_on_instances(ssm_client,commands,InstanceIds)
-# print(type(res))
+# SSH Method
+def ssh_and_run_commands(instance_ip):
+    '''This method will wrap ssh commands and execute on target machine'''
+    print(instance_ip)
+    client.connect(hostname=instance_ip, username="ubuntu", pkey=key)
 
+        # Execute a command(cmd) after connecting/ssh to an instance
+    stdin, stdout, stderr = client.exec_command('aws s3 cp s3://bucket4600/index.html ./index.html')
+    print(stdout.read())
+        # close the client connection once the job is done
+    client.close()
+
+def get_public_ip_ec2(instance_id):
+    '''Helper function for SSH'''
+    reservations = ec2_client.describe_instances(InstanceIds=instance_id).get("Reservations")
+    p_ips=[]
+    for reservation in reservations:
+        for instance in reservation['Instances']:
+            p_ips.append(instance['PublicIpAddress'])
+    return p_ips
+
+    
+
+bucket_name= input('Enter Bucket Name')
+file_url=input('Enter the location of the file')
+res=download_file_from_bucket(bucket_name,file_url)
+upload_file_to_bucket(bucket_name,file_url)
+InstanceIds=[str(x) for x in input('Provide instanceID').split(' ')]
+res=execute_command_on_instances(ssm_client,commands,InstanceIds,bucket_name)
+# public_ips=get_public_ip_ec2(InstanceIds)
+# ssh_and_run_commands(public_ips[0])

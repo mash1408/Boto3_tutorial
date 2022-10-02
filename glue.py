@@ -1,5 +1,12 @@
 import boto3
 from boto3 import Session
+
+import paramiko
+
+
+key = paramiko.RSAKey.from_private_key_file('./AWS/Passkey.pem')
+client = paramiko.SSHClient()
+client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 session = Session()
 credentials = session.get_credentials()
 # Credentials are refreshable, so accessing your access key / secret key
