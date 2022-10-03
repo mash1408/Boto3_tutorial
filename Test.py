@@ -15,7 +15,7 @@ credentials = session.get_credentials()
 # separately can lead to a race condition. Use this to get an actual matched
 # set.
 current_credentials = credentials.get_frozen_credentials()
-commands=["sudo wget https://bucket4600.s3.ap-northeast-1.amazonaws.com/index.html"]
+commands=[]
 
 AWS_REGION='ap-northeast-1'
 location = {'LocationConstraint': AWS_REGION}
